@@ -5,8 +5,8 @@
   button that points at the app on the same laptop (``http://localhost:8501``).
 * ``"app"``: the welcome screen inside the app. It works offline: three.js and its glTF
   loader are the app's own bundled copies, the 3D person comes from the app's static
-  folder, the face points are written into the page, and the Open-the-app button becomes
-  a pointer to the app's own **Start signing** button.
+  folder, the face points are written into the page, and the Open-the-app buttons become
+  **Start signing** buttons that press the app's own (hidden) Start signing button.
 
 Run ``python -m sign_bridge.ui.landing docs/index.html`` to rebuild the public page after
 editing the template.
@@ -33,7 +33,18 @@ _IMPORTS = ('import * as THREE from "three";\n'
             'import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";\n')
 _APP_LINK = re.compile(r"<!--app-link-->.*?<!--/app-link-->", re.S)
 _POSTER = re.compile(r'\s*<img src="hello\.jpg"[^>]*>')
-_HERE = '<p class="label">You are in the app. Press <b>Start signing</b> at the top to begin.</p>'
+# inside the app, the page's own buttons press the app's (hidden) Start signing button
+_START = ('<p class="open"><a class="btn" href="#" data-start>Start signing '
+          '<span aria-hidden="true">→</span></a>'
+          '<span class="label">Opens the camera and the signing tabs</span></p>')
+_START_CTA = '<a href="#" data-start>Start signing <em>camera</em></a>'
+_START_JS = """
+document.querySelectorAll("[data-start]").forEach(a => a.addEventListener("click", e => {
+  e.preventDefault();
+  try { parent.document.querySelector(".st-key-start_signing button").click(); }
+  catch (err) { a.textContent = "Use Start signing at the top of the app"; }
+}));
+"""
 
 
 def _split(page: str) -> tuple[str, str, str]:
@@ -68,8 +79,11 @@ def landing_page(mode: Mode = "web") -> str:
         if part not in page:
             raise ValueError(f"landing.html no longer contains {part!r}")
     # links to the app make no sense inside it; the first becomes a pointer to Start signing
-    page = _APP_LINK.sub(_HERE, page, count=1)
+    page = _APP_LINK.sub(_START, page, count=1)
+    page = _APP_LINK.sub(_START_CTA, page, count=1)
     page = _APP_LINK.sub("", page)
+    page = page.replace('<a class="go" href="#watch">Watch the demo →</a>',
+                        '<a class="go" href="#" data-start>Start signing →</a>')
     page = _POSTER.sub("", page)
     page = _IMPORT_MAP.sub("", page)
     page = page.replace(_IMPORTS, "const GLTFLoader = THREE.GLTFLoader;\n")
@@ -81,6 +95,7 @@ def landing_page(mode: Mode = "web") -> str:
               f"<script>\n{_GLTF_LOADER.read_text(encoding='utf-8')}\n</script>\n")
     head, style, body = _split(page)
     body = body.replace('<script type="module">', vendor + '<script type="module">', 1)
+    body += "\n<script>" + _START_JS + "</script>"
     return _document(head, style, body, theme="light")
 
 

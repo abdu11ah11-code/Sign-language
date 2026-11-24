@@ -19,22 +19,33 @@ from sign_bridge.config import load_config
 from sign_bridge.ui.components import camera_view, controls, conversation, sign_player
 from sign_bridge.ui.theme import inject_theme, masthead
 
-#: How tall the welcome page's frame is; the page scrolls inside it.
-HOME_HEIGHT = 860
+#: The welcome page fills the whole window: Streamlit's header, margins and column width are
+#: switched off for this screen only, and the page's frame is as tall as the window.
+HOME_CSS = """<style>
+[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"] {
+  display: none !important; }
+[data-testid="stMainBlockContainer"], .block-container {
+  padding: 0 !important; max-width: none !important; }
+[data-testid="stMain"] [data-testid="stVerticalBlock"] { gap: 0 !important; }
+[data-testid="stMain"] iframe {
+  display: block; width: 100% !important; height: 100vh !important; border: 0; }
+[data-testid="stAppViewContainer"], [data-testid="stMain"] { overflow: hidden !important; }
+.st-key-start_signing { position: fixed !important; left: -10000px; top: 0; }
+</style>"""
 
 
 def home() -> None:
-    """The welcome screen: the landing page, with a button into the app above it."""
+    """The welcome screen: the landing page, full window. Its Start signing buttons press
+    the hidden Streamlit button below, which switches to the signing tabs."""
     import streamlit.components.v1 as components
 
     from sign_bridge.ui.landing import landing_page
 
-    left, right = st.columns([3, 1], vertical_alignment="center")
-    left.markdown("**SignBridge** · sign to speech and speech to sign")
-    if right.button("Start signing →", key="start_signing", type="primary", width="stretch"):
+    st.markdown(HOME_CSS, unsafe_allow_html=True)
+    if st.button("Start signing", key="start_signing"):
         st.session_state["view"] = "app"
         st.rerun()
-    components.html(landing_page("app"), height=HOME_HEIGHT, scrolling=True)
+    components.html(landing_page("app"), height=900, scrolling=True)
 
 
 def main() -> None:

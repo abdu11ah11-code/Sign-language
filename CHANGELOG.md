@@ -5,6 +5,15 @@
 > Anthropic), with the course instructor's permission. All reported results
 > come from runs performed and checked by the authors.
 
+## 0.17.1 — the welcome page fills the window
+
+- Inside the app the welcome page now fills the whole browser window: Streamlit's header,
+  margins and column width are switched off for that screen only, and the page is as tall as
+  the window (it was a small scrolling box with the 3D person cut off).
+- **Start signing** is now on the page itself (header, under the intro, and in the links at
+  the end); it presses the app's own Start signing button, which stays hidden. Checked in a
+  running app: the welcome page fills a 1600×900 window and the button opens the signing tabs.
+
 ## 0.17.0 — landing page, and a welcome screen in the app
 
 - **Landing page** (`src/sign_bridge/ui/landing.html`, built by `ui/landing.py`): a Swiss-grid

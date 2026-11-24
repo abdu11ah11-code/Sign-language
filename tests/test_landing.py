@@ -41,7 +41,8 @@ def test_app_page_points_to_start_signing_instead_of_itself() -> None:
     page = landing.landing_page("app")
     assert landing.APP_URL not in page
     assert "<!--app-link-->" not in page
-    assert page.count("Start signing") == 1
+    assert page.count("data-start") >= 3                  # header, opening, links at the end
+    assert ".st-key-start_signing button" in page
 
 
 def test_numbers_on_the_page_are_the_measured_ones() -> None:
@@ -74,5 +75,6 @@ def test_docs_page_is_built_from_the_template() -> None:
 def test_app_opens_on_the_welcome_screen() -> None:
     source = (ROOT / "src" / "sign_bridge" / "ui" / "app.py").read_text(encoding="utf-8")
     assert 'setdefault("view", "home")' in source
-    assert '"Start signing →"' in source and '"Home page"' in source
+    assert 'key="start_signing"' in source and '"Home page"' in source
+    assert "100vh" in source                              # the welcome page fills the window
     assert 'landing_page("app")' in source
