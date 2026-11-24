@@ -5,6 +5,24 @@
 > Anthropic), with the course instructor's permission. All reported results
 > come from runs performed and checked by the authors.
 
+## 0.17.0 — landing page, and a welcome screen in the app
+
+- **Landing page** (`src/sign_bridge/ui/landing.html`, built by `ui/landing.py`): a Swiss-grid
+  page with a live 3D signer (drag to turn; he breathes, blinks, looks at the viewer and waves
+  hello every few seconds, all posed in the browser, no recorded data), a live 3D view of the
+  94 points the model reads (21 per hand, 12 on the body, 40 on the lips, drawn from the same
+  pose), a to-scale 3D chart of the measured results, the limits, and
+  "© 2026 Abdullah. All rights reserved."
+- **Two forms from one template.** `docs/index.html` is the public page for GitHub Pages
+  (three.js from a CDN, **Open the app** button to `http://localhost:8501`); rebuild it with
+  `python -m sign_bridge.ui.landing docs/index.html`. Inside the app the same page runs offline
+  with the app's own three.js and model, in the app's light theme.
+- **The app opens on a welcome screen**: the landing page, with **Start signing →** at the top.
+  **Home page** in the sidebar comes back to it.
+
+Tests: 199 passing (new: both page forms, offline in-app page, measured numbers on the page,
+`docs/index.html` matches the template, the app opens on the welcome screen).
+
 ## 0.16.0 — two models answer together (runs B and C)
 
 The app now averages the answers of run B's and run C's Conv-Transformers

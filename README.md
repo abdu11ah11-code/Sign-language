@@ -298,6 +298,13 @@ The animations are derived from the competition data, so
    The app averages their answers; measured on ASL Citizen's test signers, runs
    B and C together reach 93.23% top-1 (92.64% for run C alone).
 
+### Landing page (v0.17)
+
+The app opens on a welcome page; press **Start signing** to go in, and **Home page** in the
+sidebar to come back. The same page is published from `docs/` (on GitHub: Settings → Pages →
+Source: `main`, folder `/docs`). After editing `src/sign_bridge/ui/landing.html`, rebuild the
+public copy with `python -m sign_bridge.ui.landing docs/index.html`.
+
 ### Webcam training data: ASL Citizen (v0.8)
 
 Google's ASL Signs data was filmed on **phones held close to the signer**. The

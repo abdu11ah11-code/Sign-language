@@ -9,7 +9,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-
 /* Layout: a 12-column Swiss grid, flush left, ragged right; one red signal colour, used only for
    what the reader should look at (the lips the model reads, the best result, the call to action). */
 :root {
@@ -69,6 +68,11 @@ h1, h2, h3 { text-wrap: balance; }
 h1.word { margin: 0; font-weight: 800; font-size: clamp(76px, 14.6vw, 212px); line-height: 0.82; letter-spacing: -0.06em; }
 h1.word span { display: block; }
 .lede { margin: 0; max-width: 21em; font-size: clamp(21px, 2vw, 28px); line-height: 1.22; font-weight: 500; letter-spacing: -0.015em; }
+.open { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.btn { display: inline-flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 24px; background: var(--ink); color: var(--paper);
+       text-decoration: none; font-weight: 600; font-size: 17px; transition: background .2s ease; }
+.btn:hover { background: var(--signal); }
+.open code { font-family: var(--mono); text-transform: none; color: var(--ink); }
 .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--gutter); max-width: 620px; }
 .facts div { border-top: 2px solid var(--ink); padding: 10px 0 18px; font-size: 15px; }
 .facts dt { font-weight: 600; }
@@ -195,6 +199,7 @@ footer b { color: var(--ink); font-weight: 600; display: block; }
       <div class="hero-copy">
         <h1 class="word" id="title"><span>Sign</span><span>Bridge</span></h1>
         <p class="lede">Reads American Sign Language from a laptop camera, says it out loud, and signs back what it hears.</p>
+        <!--app-link--><p class="open"><a class="btn" href="http://localhost:8501">Open the app <span aria-hidden="true">→</span></a><span class="label">Runs on your laptop · start it with <code>sign-bridge</code></span></p><!--/app-link-->
         <dl class="facts">
           <div><dt>Signs it reads</dt><dd>250 in ASL, 40 Urdu letters in PSL</dd></div>
           <div><dt>Runs on</dt><dd>A laptop and its webcam</dd></div>
@@ -318,6 +323,7 @@ footer b { color: var(--ink); font-weight: 600; display: block; }
     <div class="wrap grid">
       <h2 id="watch-title">See both directions in two minutes.</h2>
       <nav aria-label="Project links">
+        <!--app-link--><a href="http://localhost:8501">Open the app <em>localhost:8501</em></a><!--/app-link-->
         <a href="#watch">Watch the demo <em>[VIDEO]</em></a>
         <a href="#watch">Read the report <em>[PDF]</em></a>
         <a href="https://github.com/abdu11ah11-code/Sign-language">Source code <em>GitHub</em></a>

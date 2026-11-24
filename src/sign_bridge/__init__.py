@@ -2,5 +2,5 @@
 
 from sign_bridge.config import AppConfig, load_config
 
-__version__ = "0.16.0"
+__version__ = "0.17.0"
 __all__ = ["AppConfig", "load_config", "__version__"]
