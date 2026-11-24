@@ -1,0 +1,411 @@
+<!doctype html>
+<!-- SignBridge 3D sign figure. Filled in by sign_bridge.ui.figure3d.sign_3d_html,
+     which replaces the five double-underscored placeholder words in this file.
+     Coordinates: drawing units (shoulders 26 apart); three.js gets
+     x = x - 50, y = 50 - y, z = -z (MediaPipe's negative z faces the camera). -->
+<html><head><meta charset="utf-8">
+<style>
+html,body{margin:0;height:100%;background:transparent;overflow:hidden;
+  font:12px/1.3 system-ui,-apple-system,Segoe UI,sans-serif;color:#6b6457}
+#v{position:relative;width:100%;height:__HEIGHT__px;cursor:grab;touch-action:none}
+#v:active{cursor:grabbing}
+#hint{position:absolute;left:10px;bottom:8px;pointer-events:none;opacity:.85}
+#where{position:absolute;left:10px;top:8px;display:none;align-items:center;gap:8px;
+  pointer-events:none;font-size:14px;font-weight:600;color:#3a2f27;background:rgba(255,255,255,.85);
+  border:1px solid #e3d9c8;border-radius:16px;padding:4px 12px 4px 8px}
+#where i{width:14px;height:14px;border-radius:50%;background:#e0352b;
+  box-shadow:0 0 0 3px #fff,0 0 0 4px #e0352b}
+#views{position:absolute;right:8px;bottom:6px;display:flex;gap:6px}
+#views button{font:inherit;color:#1e5a45;background:#f7f4ec;border:1px solid #d9d2c3;
+  border-radius:6px;padding:3px 9px;cursor:pointer}
+#views button:hover{background:#ece6d8}
+#flat{display:none;height:100%}
+</style></head><body>
+<div id="v" role="img" aria-label="3D figure showing how to sign __LABEL__">
+  <div id="where"><i></i><span></span></div>
+  <div id="hint">Drag to turn · double-click to reset</div>
+  <div id="views"><button data-yaw="0">Front</button><button data-yaw="1.5708">Side</button>
+  <button data-yaw="0.7854">Angle</button><button id="zoom">Close-up</button></div>
+</div>
+<div id="flat">__FLAT__</div>
+<script>__THREE__</script>
+<script>
+(function () {
+const D = __DATA__;
+const box = document.getElementById("v");
+function fallback() {
+  box.style.display = "none"; document.getElementById("flat").style.display = "block";
+}
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({antialias: true, alpha: true});
+} catch (e) { fallback(); return; }
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+box.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(26, 1, 1, 2000);
+camera.position.set(0, 6, 190); camera.lookAt(0, 6, 0);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xb8ae9c, 1.15));
+const key = new THREE.DirectionalLight(0xffffff, 1.35); key.position.set(70, 110, 140); scene.add(key);
+const rim = new THREE.DirectionalLight(0xffffff, 0.45); rim.position.set(-90, 40, -80); scene.add(rim);
+
+const root = new THREE.Group(); scene.add(root);
+const turn = new THREE.Group(); root.add(turn);
+if (D.mirror) { root.scale.x = -1; }
+
+const mat = (c, r) => new THREE.MeshStandardMaterial({color: c, roughness: r || 0.62,
+  metalness: 0.0, side: THREE.DoubleSide});
+const SKIN = mat(0xe7d8c2, 0.9), BODY = mat(0xcfc6b5, 0.75), HAND = mat(0x2f7a5f, 0.5),
+      DARK = mat(0x2b2520, 0.5), LIPS = mat(0xa8731e, 0.45), MOUTH = mat(0x4a2620, 0.8);
+// the head shape is drawn as if a little further back, so the face always wins where they meet
+const SKULL = mat(0xe7d8c2, 0.9); SKULL.polygonOffset = true; SKULL.polygonOffsetFactor = 6; SKULL.polygonOffsetUnits = 6;
+// the "person" look: skin, hair and shirt colours from the portrait; else the mannequin
+const PER = D.person;
+const SHIRT = PER ? mat(new THREE.Color(PER.shirt), 0.85) : BODY;
+const ARM = PER ? mat(new THREE.Color(PER.skin), 0.7) : BODY;      // sleeves rolled up
+if (PER) {
+  HAND.color.set(PER.skin); HAND.roughness = 0.7;
+  SKIN.color.set(PER.skin);
+  SKULL.color.set(PER.skin);
+}
+const CYL = new THREE.CylinderGeometry(1, 1, 1, 14, 1, true);
+const SPH = new THREE.SphereGeometry(1, 18, 12);
+const UP = new THREE.Vector3(0, 1, 0);
+
+const P = 42, SH_L = P + 4, SH_R = P + 5, EL_L = P + 6, EL_R = P + 7, WR_L = P + 8, WR_R = P + 9,
+      HIP_L = P + 10, HIP_R = P + 11, NOSE = P;
+const N = D.frames[0].length / 3;
+const cur = new Float32Array(N * 3);
+const seen = new Array(N).fill(false);
+function load(t) {
+  const F = D.frames.length;
+  const i0 = Math.floor(t) % F, i1 = (i0 + 1) % F, a = t - Math.floor(t);
+  const A = D.frames[i0], B = D.frames[i1];
+  for (let i = 0; i < N; i++) {
+    const j = 3 * i, ok0 = A[j] || A[j + 1], ok1 = B[j] || B[j + 1];
+    seen[i] = !!ok0;
+    const w = ok0 && ok1 ? a : 0;
+    cur[j] = (A[j] + (B[j] - A[j]) * w) - 50;
+    cur[j + 1] = 50 - (A[j + 1] + (B[j + 1] - A[j + 1]) * w);
+    cur[j + 2] = -(A[j + 2] + (B[j + 2] - A[j + 2]) * w);
+  }
+  // MediaPipe's shoulder and hip depth is noisy and twists the torso; keep a third of it
+  const zs = (cur[3 * SH_L + 2] + cur[3 * SH_R + 2]) / 2;
+  [SH_L, SH_R, HIP_L, HIP_R].forEach(i => { cur[3 * i + 2] = zs + (cur[3 * i + 2] - zs) / 3; });
+}
+const v3 = (i, out) => (out || new THREE.Vector3()).set(cur[3 * i], cur[3 * i + 1], cur[3 * i + 2]);
+
+// ── reusable pieces ──
+function Rod(material, r) { const m = new THREE.Mesh(CYL, material); m.userData.r = r; turn.add(m); return m; }
+function Ball(material, r) { const m = new THREE.Mesh(SPH, material); m.scale.setScalar(r); turn.add(m); return m; }
+const _d = new THREE.Vector3();
+function place(rod, a, b) {
+  _d.subVectors(b, a); const len = _d.length();
+  rod.visible = len > 1e-3;
+  if (!rod.visible) return;
+  rod.position.copy(a).addScaledVector(_d, 0.5);
+  rod.quaternion.setFromUnitVectors(UP, _d.normalize());
+  rod.scale.set(rod.userData.r, len, rod.userData.r);
+}
+
+// body
+const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 3, 8, 28), SHIRT); turn.add(torso);
+const neck = Rod(ARM, 3.7);
+const arms = [[SH_L, EL_L, WR_L, 0], [SH_R, EL_R, WR_R, 21]].map(([s, e, w, hand]) => ({
+  s, e, w, hand, upper: Rod(SHIRT, 2.3), fore: Rod(ARM, 1.9),
+  js: Ball(SHIRT, 3.0), je: Ball(SHIRT, 2.1), jw: Ball(ARM, 1.8)}));
+
+// hands
+const FINGERS = [[0, 1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16], [17, 18, 19, 20]];
+const hands = [0, 21].map(start => {
+  const bones = [], joints = [];
+  FINGERS.forEach(ch => { for (let k = 0; k + 1 < ch.length; k++) bones.push([start + ch[k], start + ch[k + 1], Rod(HAND, 0.56)]); });
+  [[5, 9], [9, 13], [13, 17]].forEach(([a, b]) => bones.push([start + a, start + b, Rod(HAND, 0.5)]));
+  for (let k = 0; k < 21; k++) joints.push([start + k, Ball(HAND, k === 0 ? 0.95 : 0.62)]);
+  const palmGeo = new THREE.BufferGeometry();
+  palmGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(15), 3));
+  palmGeo.setIndex([0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 1]);
+  const palm = new THREE.Mesh(palmGeo, HAND); turn.add(palm);
+  return {start, bones, joints, palm};
+});
+
+// head: face surface + back of the head + features
+const fs = D.faceStart, fn = D.facePoints;
+const faceGeo = new THREE.BufferGeometry();
+faceGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(fn * 3), 3));
+faceGeo.setIndex(D.tri);
+let FACE = SKIN;
+if (PER) {
+  // the portrait, wrapped over the moving face surface point by point
+  const tex = new THREE.TextureLoader().load(PER.image);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  FACE = new THREE.MeshStandardMaterial({map: tex, roughness: 0.85, side: THREE.DoubleSide,
+    emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.35});
+  faceGeo.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(PER.uv.flat()), 2));
+}
+const faceMesh = new THREE.Mesh(faceGeo, FACE); turn.add(faceMesh);
+const skull = new THREE.Mesh(SPH, SKULL); turn.add(skull);
+// hair: the top of a sphere, tilted back so it sits at the hairline in front and
+// low at the back of the head
+const HAIR = mat(PER ? new THREE.Color(PER.hair) : 0x000000, 0.95);
+HAIR.polygonOffset = true; HAIR.polygonOffsetFactor = 3; HAIR.polygonOffsetUnits = 3;
+const hairGeo = new THREE.SphereGeometry(1, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.52);
+hairGeo.rotateX(-0.8);
+const hair = new THREE.Mesh(hairGeo, HAIR); hair.visible = false; turn.add(hair);
+const innerLip = D.features.lips && D.features.lips[1] ? D.features.lips[1].slice(0, -1) : [];
+const mouthGeo = new THREE.BufferGeometry();
+mouthGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array((innerLip.length + 1) * 3), 3));
+mouthGeo.setIndex(innerLip.flatMap((_, k) => [innerLip.length, k, (k + 1) % innerLip.length]));
+const mouth = new THREE.Mesh(mouthGeo, MOUTH); turn.add(mouth);
+const tubes = [];
+const STYLE = {left_eye: [DARK, 0.26, true], right_eye: [DARK, 0.26, true], left_brow: [DARK, 0.5, false],
+  right_brow: [DARK, 0.5, false], lips: [LIPS, 0.42, true]};
+Object.entries(D.features).forEach(([name, chains]) => {
+  const st = STYLE[name]; if (!st) return;
+  chains.forEach(ch => { const m = new THREE.Mesh(new THREE.BufferGeometry(), st[0]); m.visible = false; turn.add(m);
+    tubes.push({ch, m, r: st[1], closed: st[2] && ch[0] === ch[ch.length - 1]}); });
+});
+const pupils = [Ball(DARK, 0.85), Ball(DARK, 0.85)];
+
+// ── where the finger touches: a red spot fixed on the face, a ring on the fingertip ──
+const T = D.touch;
+const glow = (c, o) => new THREE.MeshBasicMaterial({color: c, transparent: true, opacity: o,
+  side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4});
+const spot = new THREE.Group(); turn.add(spot);
+const spotCore = new THREE.Mesh(new THREE.CircleGeometry(1.7, 32), glow(0xe0352b, 0.95));
+const spotRing = new THREE.Mesh(new THREE.RingGeometry(1.7, 2.45, 40), glow(0xffffff, 0.95));
+const spotHalo = new THREE.Mesh(new THREE.RingGeometry(2.45, 4.2, 40), glow(0xe0352b, 0.35));
+spot.add(spotHalo, spotRing, spotCore);
+const tipMark = new THREE.Mesh(new THREE.SphereGeometry(0.85, 16, 12), glow(0xe0352b, 0.95)); turn.add(tipMark);
+const tipRing = new THREE.Mesh(new THREE.RingGeometry(0.95, 1.35, 32), glow(0xffffff, 0.95)); turn.add(tipRing);
+spot.visible = tipMark.visible = tipRing.visible = false;
+if (T) {
+  const lab = document.getElementById("where");
+  lab.querySelector("span").textContent = T.finger + " here";
+  lab.style.display = "flex";
+}
+let touchAnchor = null;     // the face triangle (and the point in it) the finger touches
+
+// the face's own directions, for the current frame
+function faceBasis(out) {
+  v3(D.orient[0], a); v3(D.orient[1], b); v3(D.orient[2], c); v3(D.orient[3], d);
+  out.U.subVectors(a, b); out.fh = out.U.length(); out.U.normalize();
+  out.R.subVectors(d, c); out.fw = out.R.length(); out.R.normalize();
+  out.R.addScaledVector(out.U, -out.R.dot(out.U)).normalize();
+  out.F.crossVectors(out.R, out.U).normalize();
+  out.O.copy(b);
+  return out;
+}
+const FB = {R: new THREE.Vector3(), U: new THREE.Vector3(), F: new THREE.Vector3(), O: new THREE.Vector3(), fw: 1, fh: 1};
+const flat2 = (p, B) => { const q = p.clone().sub(B.O); return [q.dot(B.R), q.dot(B.U)]; };
+
+// Find, once, which face triangle lies under the fingertip at the middle of the touch:
+// the spot then stays on that part of the face however the face moves.
+function findAnchor() {
+  if (!T || D.tri.length === 0) return null;
+  const touching = T.weight.map((w, i) => w === 1 ? i : -1).filter(i => i >= 0);
+  if (!touching.length) return null;
+  load(touching[Math.floor(touching.length / 2)]);
+  faceBasis(FB);
+  const [tx, ty] = flat2(v3(T.point), FB);
+  let best = null;
+  for (let k = 0; k < D.tri.length; k += 3) {
+    const ids = [D.tri[k], D.tri[k + 1], D.tri[k + 2]].map(i => fs + i);
+    const [p0, p1, p2] = ids.map(i => flat2(v3(i), FB));
+    const det = (p1[1] - p2[1]) * (p0[0] - p2[0]) + (p2[0] - p1[0]) * (p0[1] - p2[1]);
+    if (Math.abs(det) < 1e-9) continue;
+    const l0 = ((p1[1] - p2[1]) * (tx - p2[0]) + (p2[0] - p1[0]) * (ty - p2[1])) / det;
+    const l1 = ((p2[1] - p0[1]) * (tx - p2[0]) + (p0[0] - p2[0]) * (ty - p2[1])) / det;
+    const l2 = 1 - l0 - l1;
+    if (l0 >= -1e-6 && l1 >= -1e-6 && l2 >= -1e-6) return {ids, w: [l0, l1, l2]};
+    // otherwise remember the nearest triangle, for a fingertip just off the face's edge
+    const cx = (p0[0] + p1[0] + p2[0]) / 3, cy = (p0[1] + p1[1] + p2[1]) / 3;
+    const dist = (cx - tx) ** 2 + (cy - ty) ** 2;
+    if (!best || dist < best.dist) best = {dist, ids, w: [1 / 3, 1 / 3, 1 / 3]};
+  }
+  return best ? {ids: best.ids, w: best.w} : null;
+}
+
+const spotPos = new THREE.Vector3(), tipPos = new THREE.Vector3(), delta = new THREE.Vector3();
+// Place the spot, and during the touch move the hand so the fingertip rests on it:
+// the recording's depth is a guess, the touch itself is not.
+function touch(t) {
+  if (!touchAnchor) { spot.visible = tipMark.visible = tipRing.visible = false; return 0; }
+  faceBasis(FB);
+  spotPos.set(0, 0, 0);
+  touchAnchor.ids.forEach((i, k) => spotPos.addScaledVector(v3(i, a), touchAnchor.w[k]));
+  const F = T.weight.length, i0 = Math.floor(t) % F, f = t - Math.floor(t);
+  const w = T.weight[i0] + (T.weight[(i0 + 1) % F] - T.weight[i0]) * f;
+  if (w > 0 && seen[T.point]) {
+    v3(T.point, tipPos);
+    delta.copy(spotPos).addScaledVector(FB.F, 0.7).sub(tipPos).multiplyScalar(w);
+    for (let k = 0; k < 21; k++) {
+      const j = 3 * (T.hand + k);
+      cur[j] += delta.x; cur[j + 1] += delta.y; cur[j + 2] += delta.z;
+    }
+  }
+  return w;
+}
+function showTouch(w, now) {
+  if (!touchAnchor) return;
+  M.makeBasis(FB.R, FB.U, FB.F);
+  spot.quaternion.setFromRotationMatrix(M);
+  spot.position.copy(spotPos).addScaledVector(FB.F, 0.3);
+  const pulse = 1 + 0.18 * w * Math.sin(now / 130);
+  spot.scale.setScalar(pulse);
+  spotHalo.material.opacity = 0.18 + 0.3 * w;
+  spot.visible = true;
+  tipMark.visible = tipRing.visible = !!seen[T.point];
+  v3(T.point, tipMark.position);
+  tipRing.position.copy(tipMark.position).addScaledVector(FB.F, 0.9);
+  tipRing.quaternion.copy(spot.quaternion);
+}
+const eyeChains = [D.features.left_eye ? D.features.left_eye[0] : null, D.features.right_eye ? D.features.right_eye[0] : null];
+
+const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), d = new THREE.Vector3();
+const R = new THREE.Vector3(), U = new THREE.Vector3(), Fw = new THREE.Vector3(), M = new THREE.Matrix4();
+
+function pose() {
+  const haveFace = D.tri.length > 0 && !!seen[D.orient[0]] && !!seen[D.orient[1]];
+  // torso between shoulders and hips (hips estimated when off-screen)
+  v3(SH_L, a); v3(SH_R, b);
+  const shW = Math.max(a.distanceTo(b), 1), shMid = a.clone().add(b).multiplyScalar(0.5);
+  let hipMid;
+  if (seen[HIP_L] && seen[HIP_R]) { hipMid = v3(HIP_L, c).add(v3(HIP_R, d)).multiplyScalar(0.5); }
+  else { hipMid = shMid.clone().add(new THREE.Vector3(0, -1.15 * shW, 0)); }
+  U.subVectors(shMid, hipMid); const tH = U.length(); U.normalize();
+  R.subVectors(b, a).normalize(); R.addScaledVector(U, -R.dot(U)).normalize();
+  Fw.crossVectors(R, U).normalize();
+  // a capsule from just above the shoulder line to the hips: rounded shoulders
+  const top = 0.1 * shW, span = tH + top;
+  M.makeBasis(R, U, Fw); torso.quaternion.setFromRotationMatrix(M);
+  torso.position.copy(shMid).addScaledVector(U, top - span / 2);
+  torso.scale.set(shW * 0.98, span / 4, shW * 0.5);
+  torso.visible = !!(seen[SH_L] && seen[SH_R]);
+
+  // arms; the forearm ends at the hand's wrist when the hand is tracked
+  arms.forEach(arm => {
+    const s = v3(arm.s), e = v3(arm.e);
+    const w = seen[arm.hand] ? v3(arm.hand) : v3(arm.w);
+    const ok = !!(seen[arm.s] && seen[arm.e] && (seen[arm.hand] || seen[arm.w]));
+    place(arm.upper, s, e); place(arm.fore, e, w);
+    arm.js.position.copy(s); arm.je.position.copy(e); arm.jw.position.copy(w);
+    [arm.upper, arm.fore, arm.js, arm.je, arm.jw].forEach(m => m.visible = m.visible && ok);
+    arm.js.visible = !!seen[arm.s];
+  });
+
+  // hands
+  hands.forEach(h => {
+    const on = !!seen[h.start];
+    h.bones.forEach(([i, j, rod]) => { place(rod, v3(i, a), v3(j, b)); rod.visible = !!(rod.visible && on && seen[j]); });
+    h.joints.forEach(([i, ball]) => { v3(i, ball.position); ball.visible = !!(on && seen[i]); });
+    // palm fan: wrist, then the knuckles of index, middle, ring and little finger
+    const p = h.palm.geometry.attributes.position;
+    v3(h.start, a); p.setXYZ(0, a.x, a.y, a.z);
+    v3(h.start + 5, a); p.setXYZ(1, a.x, a.y, a.z);
+    v3(h.start + 9, a); p.setXYZ(2, a.x, a.y, a.z);
+    v3(h.start + 13, a); p.setXYZ(3, a.x, a.y, a.z);
+    v3(h.start + 17, a); p.setXYZ(4, a.x, a.y, a.z);
+    p.needsUpdate = true; h.palm.geometry.computeVertexNormals(); h.palm.visible = on;
+  });
+
+  // head
+  if (haveFace) {
+    const p = faceGeo.attributes.position;
+    for (let i = 0; i < fn; i++) p.setXYZ(i, cur[3 * (fs + i)], cur[3 * (fs + i) + 1], cur[3 * (fs + i) + 2]);
+    p.needsUpdate = true; faceGeo.computeVertexNormals(); faceGeo.computeBoundingSphere();
+    v3(D.orient[0], a); v3(D.orient[1], b); v3(D.orient[2], c); v3(D.orient[3], d);
+    U.subVectors(a, b); const fh = U.length(); U.normalize();
+    R.subVectors(d, c); const fw = R.length(); R.normalize();
+    R.addScaledVector(U, -R.dot(U)).normalize();
+    Fw.crossVectors(R, U).normalize();
+    const centre = a.clone().add(b).multiplyScalar(0.5);
+    M.makeBasis(R, U, Fw); skull.quaternion.setFromRotationMatrix(M);
+    skull.position.copy(centre).addScaledVector(Fw, -0.6 * fw).addScaledVector(U, 0.02 * fh);
+    skull.scale.set(0.53 * fw, 0.66 * fh, 0.6 * fw);
+    if (PER) {
+      hair.quaternion.copy(skull.quaternion);
+      hair.position.copy(skull.position).addScaledVector(U, 0.06 * fh).addScaledVector(Fw, -0.06 * fw);
+      hair.scale.set(0.58 * fw, 0.7 * fh, 0.66 * fw);
+      hair.visible = true;
+    }
+    if (innerLip.length) {
+      const mp = mouth.geometry.attributes.position, m = new THREE.Vector3();
+      innerLip.forEach((i, k) => { v3(i, a).addScaledVector(Fw, -0.15); mp.setXYZ(k, a.x, a.y, a.z); m.add(a); });
+      m.multiplyScalar(1 / innerLip.length).addScaledVector(Fw, -0.6);
+      mp.setXYZ(innerLip.length, m.x, m.y, m.z);
+      mp.needsUpdate = true; mouth.geometry.computeVertexNormals(); mouth.visible = true;
+    }
+    neck.visible = true;
+    place(neck, shMid.clone().addScaledVector(Fw, 0.04 * shW), skull.position.clone().addScaledVector(U, -0.45 * fh));
+    if (!PER) tubes.forEach(t => {
+      const pts = t.ch.filter((_, k) => !(t.closed && k === t.ch.length - 1))
+        .map(i => v3(i).addScaledVector(Fw, 0.35));
+      t.m.geometry.dispose();
+      t.m.geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, t.closed), pts.length * 3, t.r, 6, t.closed);
+      t.m.visible = true;
+    });
+    eyeChains.forEach((ch, n) => {
+      if (!ch) { pupils[n].visible = false; return; }
+      const m = new THREE.Vector3(); ch.slice(0, -1).forEach(i => m.add(v3(i, a)));
+      pupils[n].position.copy(m.multiplyScalar(1 / (ch.length - 1))).addScaledVector(Fw, 0.2);
+      pupils[n].visible = !PER;
+    });
+    faceMesh.visible = true;
+  } else {
+    faceMesh.visible = false; mouth.visible = false; tubes.forEach(t => t.m.visible = false); pupils.forEach(p => p.visible = false);
+    const n = v3(NOSE, a);
+    skull.position.copy(n).add(new THREE.Vector3(0, 2, -4)); skull.quaternion.identity();
+    skull.scale.set(7.5, 9.5, 8.5);
+    place(neck, shMid, n.clone().add(new THREE.Vector3(0, -7, -4)));
+  }
+}
+
+// ── turning ──
+let yaw = 0, pitch = 0, dragging = false, lx = 0, ly = 0, target = null;
+box.addEventListener("pointerdown", e => { if (e.target.tagName === "BUTTON") return; dragging = true; lx = e.clientX; ly = e.clientY; box.setPointerCapture(e.pointerId); target = null; });
+box.addEventListener("pointermove", e => { if (!dragging) return;
+  yaw += (e.clientX - lx) * 0.01; pitch = Math.max(-0.7, Math.min(0.7, pitch + (e.clientY - ly) * 0.008));
+  lx = e.clientX; ly = e.clientY; });
+box.addEventListener("pointerup", () => { dragging = false; });
+box.addEventListener("dblclick", () => { target = 0; pitch = 0; });
+document.querySelectorAll("#views button[data-yaw]").forEach(btn => btn.addEventListener("click", () => {
+  target = parseFloat(btn.dataset.yaw) * (D.mirror ? -1 : 1); pitch = 0; }));
+
+function size() {
+  const w = box.clientWidth || 600, h = box.clientHeight || __HEIGHT__;
+  renderer.setSize(w, h, false); renderer.domElement.style.width = "100%"; renderer.domElement.style.height = h + "px";
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+new ResizeObserver(size).observe(box); size();
+
+touchAnchor = findAnchor();
+// close-up: the camera glides to the head (and back), the figure still turns
+let closeUp = false;
+const zoomBtn = document.getElementById("zoom");
+zoomBtn.addEventListener("click", () => { closeUp = !closeUp; zoomBtn.textContent = closeUp ? "Whole body" : "Close-up"; });
+const camFar = new THREE.Vector3(0, 6, 190), lookFar = new THREE.Vector3(0, 6, 0);
+const camAt = camFar.clone(), lookAt = lookFar.clone(), headW = new THREE.Vector3();
+function aim() {
+  if (closeUp) {
+    skull.getWorldPosition(headW);
+    camAt.lerp(new THREE.Vector3(headW.x, headW.y - 2, headW.z + 78), 0.12);
+    lookAt.lerp(new THREE.Vector3(headW.x, headW.y - 2, headW.z), 0.12);
+  } else { camAt.lerp(camFar, 0.12); lookAt.lerp(lookFar, 0.12); }
+  camera.position.copy(camAt); camera.lookAt(lookAt);
+}
+const start = performance.now();
+function tick(now) {
+  // the first animation frame's clock can read slightly before `start`
+  const t = D.frame === null ? Math.max(0, (now - start) / 1000) * D.fps * D.speed : D.frame;
+  load(t); const tw = touch(t); pose(); showTouch(tw, now);
+  if (target !== null) { yaw += (target - yaw) * 0.15; if (Math.abs(target - yaw) < 1e-3) target = null; }
+  turn.rotation.set(pitch, yaw, 0);
+  turn.updateMatrixWorld(true); aim();
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+try { requestAnimationFrame(tick); } catch (e) { fallback(); }
+})();
+</script></body></html>

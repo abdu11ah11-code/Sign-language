@@ -1,0 +1,594 @@
+<!doctype html>
+<!-- SignBridge 3D person. Filled in by sign_bridge.ui.figure3d.sign_3d_html, which replaces
+     the double-underscored placeholder words in this file. The person (avatar/person.glb,
+     built in Blender from MakeHuman CC0 data) is posed from the recorded landmarks every
+     frame: arms by two-bone IK, hands and fingers by bone directions, head and jaw from
+     the face. Recorded points use drawing units; three.js gets x - 50, 50 - y, -z. -->
+<html><head><meta charset="utf-8">
+<style>
+html,body{margin:0;height:100%;background:transparent;overflow:hidden;
+  font:12px/1.3 system-ui,-apple-system,Segoe UI,sans-serif;color:#6b6457}
+#v{position:relative;width:100%;height:__HEIGHT__px;cursor:grab;touch-action:none}
+#v:active{cursor:grabbing}
+#hint{position:absolute;left:10px;bottom:8px;pointer-events:none;opacity:.85}
+#where{position:absolute;left:10px;bottom:34px;display:none;align-items:center;gap:8px;
+  pointer-events:none;font-size:14px;font-weight:600;color:#3a2f27;background:rgba(255,255,255,.85);
+  border:1px solid #e3d9c8;border-radius:16px;padding:4px 12px 4px 8px}
+#where i{width:14px;height:14px;border-radius:50%;background:#e0352b;
+  box-shadow:0 0 0 3px #fff,0 0 0 4px #e0352b}
+#views{position:absolute;right:8px;bottom:6px;display:flex;gap:6px}
+#views button{font:inherit;color:#1e5a45;background:#f7f4ec;border:1px solid #d9d2c3;
+  border-radius:6px;padding:3px 9px;cursor:pointer}
+#views button:hover{background:#ece6d8}
+#wait{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:13px;color:#8a8273;pointer-events:none}
+#flat{display:none;height:100%}
+#word{position:absolute;left:50%;top:8px;transform:translateX(-50%);display:none;pointer-events:none;
+  font-size:20px;font-weight:700;letter-spacing:.04em;color:#1e5a45;background:rgba(255,255,255,.9);
+  border:1px solid #d9d2c3;border-radius:18px;padding:3px 16px}
+#word small{font-weight:500;color:#8a8273;margin-left:8px;font-size:13px}
+</style></head><body>
+<div id="v" role="img" aria-label="3D person showing how to sign __LABEL__">
+  <div id="wait">Loading the 3D person…</div>
+  <div id="where"><i></i><span></span></div>
+  <div id="word"></div>
+  <div id="hint">Drag to turn · double-click to reset</div>
+  <div id="views"><button data-yaw="0">Front</button><button data-yaw="1.5708">Side</button>
+  <button data-yaw="0.7854">Angle</button><button id="zoom">Close-up</button></div>
+</div>
+<div id="flat">__FLAT__</div>
+<script>__THREE__</script>
+<script>__GLTF__</script>
+<script>
+(function () {
+const D = __DATA__;
+const box = document.getElementById("v");
+function fallback() {
+  box.style.display = "none"; document.getElementById("flat").style.display = "block";
+}
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({antialias: true, alpha: true});
+} catch (e) { fallback(); return; }
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+box.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(24, 1, 0.05, 50);
+scene.add(new THREE.HemisphereLight(0xfff8f0, 0x8a7f72, 1.6));
+const key = new THREE.DirectionalLight(0xfff4e8, 2.4); key.position.set(1.2, 2.6, 3.0); scene.add(key);
+const fill = new THREE.DirectionalLight(0xe8f0ff, 0.8); fill.position.set(-2.0, 1.6, 1.6); scene.add(fill);
+const rim = new THREE.DirectionalLight(0xffffff, 1.1); rim.position.set(-0.6, 2.4, -2.5); scene.add(rim);
+
+const root = new THREE.Group(); scene.add(root);
+const turn = new THREE.Group(); root.add(turn);
+
+// ── recorded landmarks of the current frame (three.js axes, drawing units) ──
+const N = D.frames[0].length / 3;
+const cur = new Float32Array(N * 3);
+const seen = new Array(N).fill(false);
+const P = 42, SH_L = P + 4, SH_R = P + 5, EL_L = P + 6, EL_R = P + 7, WR_L = P + 8, WR_R = P + 9,
+      HIP_L = P + 10, HIP_R = P + 11;
+let tilt = 0;                         // eases the sign's steady head lean (see _tilt_fix)
+function load(t) {
+  const F = D.frames.length;
+  const i0 = Math.floor(t) % F, i1 = (i0 + 1) % F, a = t - Math.floor(t);
+  const A = D.frames[i0], B = D.frames[i1];
+  for (let i = 0; i < N; i++) {
+    const j = 3 * i, ok0 = A[j] || A[j + 1], ok1 = B[j] || B[j + 1];
+    seen[i] = !!ok0;
+    const w = ok0 && ok1 ? a : 0;
+    cur[j] = (A[j] + (B[j] - A[j]) * w) - 50;
+    cur[j + 1] = 50 - (A[j + 1] + (B[j + 1] - A[j + 1]) * w);
+    cur[j + 2] = -(A[j + 2] + (B[j + 2] - A[j + 2]) * w);
+  }
+  tilt = D.tiltFix ? D.tiltFix[i0] + ((D.tiltFix[i1] || 0) - D.tiltFix[i0]) * a : 0;
+  // MediaPipe's shoulder and hip depth is noisy and twists the torso; keep a third of it
+  const zs = (cur[3 * SH_L + 2] + cur[3 * SH_R + 2]) / 2;
+  [SH_L, SH_R, HIP_L, HIP_R].forEach(i => { cur[3 * i + 2] = zs + (cur[3 * i + 2] - zs) / 3; });
+}
+const V = () => new THREE.Vector3();
+const rec = (i, out) => (out || V()).set(cur[3 * i], cur[3 * i + 1], cur[3 * i + 2]);
+
+// ── small maths ──
+const Q = () => new THREE.Quaternion();
+const _m = new THREE.Matrix4();
+function basisQuat(R, U, out) {           // rotation whose x, y axes are R, U (made orthonormal)
+  const r = R.clone().normalize(), u = U.clone().addScaledVector(r, -U.dot(r)).normalize();
+  const f = V().crossVectors(r, u);
+  return (out || Q()).setFromRotationMatrix(_m.makeBasis(r, u, f));
+}
+const smooth = (lo, hi, x) => { const t = Math.min(1, Math.max(0, (x - lo) / (hi - lo))); return t * t * (3 - 2 * t); };
+
+// ── the person ──
+let ready = false, B = {}, restPos = {}, restQ = {}, restLocal = {}, dirLocal = {}, avFace = [];
+const AF = D.avatar;
+function bone(n) { return B[n]; }
+function worldPos(n, out) { return B[n].getWorldPosition(out || V()); }
+function worldQuat(n, out) { return B[n].getWorldQuaternion(out || Q()); }
+function setWorldQuat(n, q) {
+  const b = B[n], pq = b.parent.getWorldQuaternion(Q());
+  b.quaternion.copy(pq.invert().multiply(q)); b.updateMatrixWorld(true);
+}
+// turn a bone so that its own direction (bone head -> `toward`) points along `dir`
+function aim(n, dir, amount) {
+  if (dir.lengthSq() < 1e-12) return;
+  const wq = worldQuat(n), now = dirLocal[n].clone().applyQuaternion(wq);
+  let q = Q().setFromUnitVectors(now, dir.clone().normalize());
+  if (amount !== undefined && amount < 1) q = Q().slerp(q, amount);
+  setWorldQuat(n, q.multiply(wq));
+}
+const SIDES = {L: {sh: SH_L, el: EL_L, wr: WR_L, hand: 0}, R: {sh: SH_R, el: EL_R, wr: WR_R, hand: 21}};
+const CHAINS = [  // avatar bones, recorded hand points (start, end) for each bone's direction
+  [["finger1-1", 1, 2], ["finger1-2", 2, 3], ["finger1-3", 3, 4]],
+  [["finger2-1", 5, 6], ["finger2-2", 6, 7], ["finger2-3", 7, 8]],
+  [["finger3-1", 9, 10], ["finger3-2", 10, 11], ["finger3-3", 11, 12]],
+  [["finger4-1", 13, 14], ["finger4-2", 14, 15], ["finger4-3", 15, 16]],
+  [["finger5-1", 17, 18], ["finger5-2", 18, 19], ["finger5-3", 19, 20]]];
+const TIPS = {4: "finger1-3", 8: "finger2-3", 12: "finger3-3", 16: "finger4-3", 20: "finger5-3"};
+let L1 = {}, L2 = {}, tipLen = {};
+
+function setUp(model) {
+  model.traverse(o => {
+    if (o.isBone) B[o.name] = o;
+    if (o.isMesh) {
+      o.frustumCulled = false;
+      const m = o.material;
+      if (m && m.name === "Hair") {
+        m.alphaTest = 0.35; m.transparent = false; m.side = THREE.DoubleSide; m.alphaToCoverage = true;
+        m.roughness = 0.75; m.depthWrite = true;
+      } else if (m && /Skin|Mouth/.test(m.name)) { m.roughness = 0.62; }
+      else if (m && /Shirt|Trousers/.test(m.name)) {
+        m.roughness = 0.9; m.side = THREE.DoubleSide;
+        if (m.name === "Shirt") m.color.setHex(0x2c333d);   // charcoal, not black: folds show
+      }
+    }
+  });
+  turn.add(model); scene.updateMatrixWorld(true);
+  for (const n in B) { restPos[n] = worldPos(n); restQ[n] = worldQuat(n); restLocal[n] = B[n].quaternion.clone(); }
+  const dirTo = (n, to) => {           // the bone's own direction, in its rest frame
+    const d = restPos[to].clone().sub(restPos[n]);
+    dirLocal[n] = d.normalize().applyQuaternion(restQ[n].clone().invert());
+  };
+  ["L", "R"].forEach(s => {
+    dirTo("upperarm01_" + s, "lowerarm01_" + s); dirTo("lowerarm01_" + s, "wrist_" + s);
+    L1[s] = restPos["upperarm01_" + s].distanceTo(restPos["lowerarm01_" + s]);
+    L2[s] = restPos["lowerarm01_" + s].distanceTo(restPos["wrist_" + s]);
+    CHAINS.forEach(ch => ch.forEach(([b], k) => {
+      const n = b + "_" + s;
+      if (k + 1 < ch.length) dirTo(n, ch[k + 1][0] + "_" + s);
+      else {                           // last bone: carry on the line of the one before
+        const prev = ch[k - 1][0] + "_" + s, d = restPos[n].clone().sub(restPos[prev]);
+        dirLocal[n] = d.normalize().applyQuaternion(restQ[n].clone().invert());
+        tipLen[n] = restPos[n].distanceTo(restPos[prev]) * 0.85;
+      }
+    }));
+  });
+  // the face points on the person, fixed to the head (or jaw) bone
+  avFace = AF.face.map(f => {
+    if (!f) return null;
+    const p = new THREE.Vector3(f[0], f[1], f[2]), n = f[3];
+    const inv = new THREE.Matrix4().compose(restPos[n], restQ[n], new THREE.Vector3(1, 1, 1)).invert();
+    return {n, local: p.applyMatrix4(inv)};
+  });
+  ready = true;
+  document.getElementById("wait").style.display = "none";
+}
+const _cm = new THREE.Matrix4(), _one = new THREE.Vector3(1, 1, 1);
+function face(i, out) {               // a face point on the posed person
+  const f = avFace[i]; if (!f) return null;
+  _cm.compose(worldPos(f.n), worldQuat(f.n), _one);
+  return (out || V()).copy(f.local).applyMatrix4(_cm);
+}
+
+// ── where the finger touches: red spot on the face, ring on the fingertip ──
+// one touch per sign (a sentence has several); each has the frames where its sign is shown
+const TS = (D.touches || (D.touch ? [D.touch] : [])).map(x => Object.assign(
+  {start: 0, end: D.frames.length - 1}, x));
+let T = null;                         // the touch of the sign being shown now
+const glow = (c, o) => new THREE.MeshBasicMaterial({color: c, transparent: true, opacity: o,
+  side: THREE.DoubleSide, depthWrite: false, depthTest: true, polygonOffset: true,
+  polygonOffsetFactor: -4, polygonOffsetUnits: -4});
+const spot = new THREE.Group(); turn.add(spot);
+const RS = 0.0105;                    // spot radius, metres
+const spotCore = new THREE.Mesh(new THREE.CircleGeometry(RS, 32), glow(0xe0352b, 0.95));
+const spotRing = new THREE.Mesh(new THREE.RingGeometry(RS, RS * 1.45, 40), glow(0xffffff, 0.95));
+const spotHalo = new THREE.Mesh(new THREE.RingGeometry(RS * 1.45, RS * 2.5, 40), glow(0xe0352b, 0.35));
+spot.add(spotHalo, spotRing, spotCore);
+const tipMark = new THREE.Mesh(new THREE.SphereGeometry(0.0055, 16, 12), glow(0xe0352b, 0.95)); turn.add(tipMark);
+spot.visible = tipMark.visible = false;
+const whereLab = document.getElementById("where");
+function showWhere(tc) {
+  if (tc) whereLab.querySelector("span").textContent = tc.finger + " here";
+  whereLab.style.display = tc ? "flex" : "none";
+}
+// the word being signed (a sentence), and how far through the sentence
+const WORDS = D.words || [], wordLab = document.getElementById("word");
+let wordNow = -1;
+function showWord(t) {
+  if (!WORDS.length) return;
+  const f = Math.floor(t) % D.frames.length;
+  let k = WORDS.findIndex(w => f >= w.start && f <= w.end);
+  if (k < 0) k = WORDS.findIndex(w => f < w.start) - 1;
+  if (k === wordNow) return;
+  wordNow = k;
+  if (k < 0) { wordLab.style.display = "none"; return; }
+  wordLab.textContent = WORDS[k].word;
+  const n = document.createElement("small"); n.textContent = (k + 1) + " / " + WORDS.length;
+  wordLab.appendChild(n); wordLab.style.display = "block";
+}
+
+// the recorded face's own directions (orient = forehead top, chin, the two sides)
+function recFace(out) {
+  const [t, c, a, b] = D.orient.map(i => rec(i));
+  out.U = t.clone().sub(c); out.fh = out.U.length(); out.U.normalize();
+  out.R = b.clone().sub(a); out.fw = out.R.length(); out.R.normalize();
+  out.R.addScaledVector(out.U, -out.R.dot(out.U)).normalize();
+  if (tilt) out.U.applyAxisAngle(out.R, tilt);
+  out.F = V().crossVectors(out.R, out.U); out.O = c;
+  out.ok = D.orient.every(i => seen[i]);
+  return out;
+}
+function avFaceBasis(out) {
+  const [t, c, a, b] = AF.orient.map(i => face(i));
+  out.U = t.clone().sub(c); out.fh = out.U.length(); out.U.normalize();
+  out.R = b.clone().sub(a); out.fw = out.R.length(); out.R.normalize();
+  out.R.addScaledVector(out.U, -out.R.dot(out.U)).normalize();
+  out.F = V().crossVectors(out.R, out.U); out.O = c;
+  return out;
+}
+// the face triangle under the fingertip in the middle of the touch (found once)
+function findAnchor(T) {
+  if (!T || !D.tri.length) return null;
+  const touching = T.weight.map((w, i) => w === 1 ? i : -1).filter(i => i >= 0);
+  if (!touching.length) return null;
+  load(touching[Math.floor(touching.length / 2)]);
+  const F = recFace({});
+  const flat = p => { const q = p.clone().sub(F.O); return [q.dot(F.R), q.dot(F.U)]; };
+  const [tx, ty] = flat(rec(T.point));
+  let best = null;
+  for (let k = 0; k < D.tri.length; k += 3) {
+    const ids = [D.tri[k], D.tri[k + 1], D.tri[k + 2]];
+    const [p0, p1, p2] = ids.map(i => flat(rec(D.faceStart + i)));
+    const det = (p1[1] - p2[1]) * (p0[0] - p2[0]) + (p2[0] - p1[0]) * (p0[1] - p2[1]);
+    if (Math.abs(det) < 1e-9) continue;
+    const l0 = ((p1[1] - p2[1]) * (tx - p2[0]) + (p2[0] - p1[0]) * (ty - p2[1])) / det;
+    const l1 = ((p2[1] - p0[1]) * (tx - p2[0]) + (p0[0] - p2[0]) * (ty - p2[1])) / det;
+    const l2 = 1 - l0 - l1;
+    if (l0 >= -1e-6 && l1 >= -1e-6 && l2 >= -1e-6 && ids.every(i => avFace[i])) return {ids, w: [l0, l1, l2]};
+    const cx = (p0[0] + p1[0] + p2[0]) / 3, cy = (p0[1] + p1[1] + p2[1]) / 3;
+    const dist = (cx - tx) ** 2 + (cy - ty) ** 2;
+    if (ids.every(i => avFace[i]) && (!best || dist < best.dist)) best = {dist, ids, w: [1 / 3, 1 / 3, 1 / 3]};
+  }
+  return best ? {ids: best.ids, w: best.w} : null;
+}
+let anchor = null;
+function touchAt(t) {                  // the touch whose sign is on screen at time t
+  const f = Math.floor(t) % D.frames.length;
+  return TS.find(x => f >= x.start && f <= x.end) || null;
+}
+function touchWeight(t) {
+  if (!T) return 0;
+  const F = T.weight.length, i0 = Math.floor(t) % F, f = t - Math.floor(t);
+  return T.weight[i0] + (T.weight[(i0 + 1) % F] - T.weight[i0]) * f;
+}
+function spotPoint(out) {
+  out.set(0, 0, 0);
+  anchor.ids.forEach((i, k) => out.addScaledVector(face(i), anchor.w[k]));
+  return out;
+}
+
+// ── posing ──
+function resetPose() { for (const n in B) B[n].quaternion.copy(restLocal[n]); turn.updateMatrixWorld(true); }
+
+function poseTorso() {
+  if (!(seen[SH_L] && seen[SH_R])) return;
+  const a = rec(SH_L), b = rec(SH_R), mid = a.clone().add(b).multiplyScalar(0.5);
+  const up = seen[HIP_L] && seen[HIP_R] ? mid.clone().sub(rec(HIP_L).add(rec(HIP_R)).multiplyScalar(0.5)) : V().set(0, 1, 0);
+  const qRec = basisQuat(a.clone().sub(b), up);
+  const r0 = restPos["upperarm01_L"].clone().sub(restPos["upperarm01_R"]);
+  const qRest = basisQuat(r0, V().set(0, 1, 0));
+  const q = qRec.multiply(qRest.invert());
+  const qd = Q().slerp(q, 0.6);                   // a little less than recorded: depth is noisy
+  ["spine04", "spine03", "spine02", "spine01"].forEach((n, k) => {
+    const part = Q().slerp(qd, (k + 1) / 4);
+    setWorldQuat(n, part.multiply(restQ[n]));
+  });
+}
+
+let recF = {}, avF = {};
+function poseHead() {
+  recFace(recF);
+  if (!recF.ok) return;
+  const qRec = basisQuat(recF.R, recF.U);
+  const top = face(AF.orient[0]), chin = face(AF.orient[1]), sa = face(AF.orient[2]), sb = face(AF.orient[3]);
+  // the person's face directions with the head at rest (pose already set below the neck)
+  const qNow = basisQuat(sb.clone().sub(sa), top.clone().sub(chin));
+  const q = Q().slerp(qRec.multiply(qNow.invert()), 0.8);       // a little calmer than recorded
+  const chain = [["neck01", 0.15], ["neck02", 0.3], ["neck03", 0.5], ["head", 1.0]];
+  const before = chain.map(([n]) => worldQuat(n));
+  chain.forEach(([n, w], k) => setWorldQuat(n, Q().slerp(q, w).multiply(before[k])));
+  // the jaw opens with the mouth
+  if (seen[D.lipsIn[0]] && seen[D.lipsIn[1]]) {
+    const open = rec(D.lipsIn[0]).distanceTo(rec(D.lipsIn[1])) / recF.fh;
+    const ang = Math.min(0.2, Math.max(0, (open - 0.03) * 1.4));
+    const axis = face(AF.orient[3]).sub(face(AF.orient[2])).normalize();
+    setWorldQuat("jaw", Q().setFromAxisAngle(axis, ang).multiply(worldQuat("jaw")));
+  }
+}
+
+// recorded body point -> the person's space (around the shoulders, scaled)
+function bodyMap(p, out) {
+  const a = rec(SH_L), b = rec(SH_R), mid = a.add(b).multiplyScalar(0.5);
+  const w = rec(SH_L).distanceTo(rec(SH_R)) || 26;
+  const am = worldPos("upperarm01_L").add(worldPos("upperarm01_R")).multiplyScalar(0.5);
+  const aw = worldPos("upperarm01_L").distanceTo(worldPos("upperarm01_R"));
+  return (out || V()).copy(p).sub(mid).multiplyScalar(aw / w).add(am);
+}
+// recorded point near the face -> the same place by the person's face
+function faceMap(p, out) {
+  const q = p.clone().sub(recF.O);
+  const x = q.dot(recF.R) / recF.fw, y = q.dot(recF.U) / recF.fh, z = q.dot(recF.F) / recF.fw;
+  return (out || V()).copy(avF.O).addScaledVector(avF.R, x * avF.fw).addScaledVector(avF.U, y * avF.fh)
+    .addScaledVector(avF.F, z * avF.fw);
+}
+function mapPoint(p) {
+  const b = bodyMap(p);
+  if (!recF.ok) return b;
+  const centre = rec(D.orient[0]).add(rec(D.orient[1])).multiplyScalar(0.5);
+  const w = smooth(2.2, 1.0, p.distanceTo(centre) / recF.fw);   // 1 near the face
+  return w > 0 ? b.lerp(faceMap(p), w) : b;
+}
+
+function twoBone(s, S, W, pole) {
+  const up = "upperarm01_" + s, lo = "lowerarm01_" + s;
+  const l1 = L1[s], l2 = L2[s];
+  const dv = W.clone().sub(S); let d = dv.length(); const dir = dv.normalize();
+  d = Math.min(Math.max(d, Math.abs(l1 - l2) + 1e-4), l1 + l2 - 1e-4);
+  const a = (l1 * l1 - l2 * l2 + d * d) / (2 * d), h = Math.sqrt(Math.max(l1 * l1 - a * a, 0));
+  const pp = pole.clone().addScaledVector(dir, -pole.dot(dir));
+  if (pp.lengthSq() < 1e-8) pp.set(0, -1, -0.3).addScaledVector(dir, -dir.y);
+  pp.normalize();
+  const E = S.clone().addScaledVector(dir, a).addScaledVector(pp, h);
+  aim(up, E.clone().sub(S));
+  aim(lo, S.clone().addScaledVector(dir, d).sub(worldPos(lo)));
+}
+
+// a hand that is not signing rests at the person's side, elbow back, fingers loosely bent
+function hangPoint(s) {
+  const S = worldPos("upperarm01_" + s);
+  return S.add(V().set(s === "L" ? 0.035 : -0.035, -(L1[s] + L2[s]) * 0.97, 0.05));
+}
+const hangPole = s => V().set(s === "L" ? 0.3 : -0.3, 0, -1);
+function trackedPole(s) {
+  const sd = SIDES[s];
+  return seen[sd.el] ? mapPoint(rec(sd.el)).sub(worldPos("upperarm01_" + s))
+                     : V().set(s === "L" ? 1 : -1, -0.6, -0.4);
+}
+function relaxHand(s, amount) {
+  if (amount <= 0) return;
+  // each finger bends a little more at every joint; the thumb only a little
+  CHAINS.forEach((ch, f) => ch.forEach(([b], k) => {
+    const a = (f === 0 ? 0.12 : [0.22, 0.32, 0.22][k] + 0.04 * f) * amount;
+    B[b + "_" + s].quaternion.multiply(Q().setFromAxisAngle(V().set(1, 0, 0), CURL * a));
+  }));
+  turn.updateMatrixWorld(true);
+}
+let CURL = 1;                                  // which way a finger bends (set from the bones)
+
+const handFrame = (pts) => basisQuat(pts[1].clone().sub(pts[2]), pts[0]);   // across, along
+function poseArm(s, wristTarget, pole) {
+  const sd = SIDES[s], S = worldPos("upperarm01_" + s);
+  let W = wristTarget;
+  if (!W) { W = hangPoint(s); pole = hangPole(s); }
+  twoBone(s, S, W, pole || trackedPole(s));
+  const h = sd.hand;
+  if (!seen[h] || !seen[h + 9]) { relaxHand(s, 1); return; }
+  // the hand: point it at the middle knuckle, turn it so the knuckles lie across
+  const w0 = rec(h), along = rec(h + 9).sub(w0), across = rec(h + 5).sub(rec(h + 17));
+  const qRec = basisQuat(across, along);
+  const n = "wrist_" + s;
+  const aAlong = restPos["finger3-1_" + s].clone().sub(restPos[n]);
+  const aAcross = restPos["finger2-1_" + s].clone().sub(restPos["finger5-1_" + s]);
+  const qRest = basisQuat(aAcross, aAlong);
+  const q = qRec.multiply(qRest.invert());
+  const qWrist = q.clone().multiply(restQ[n]);
+  // share the forearm's twist with its lower half so the wrist does not wring
+  const lo2 = "lowerarm02_" + s, axis = worldPos(n).sub(worldPos("lowerarm01_" + s)).normalize();
+  const dq = qWrist.clone().multiply(worldQuat(n).invert());          // still to turn, world
+  const pr = V().set(dq.x, dq.y, dq.z).projectOnVector(axis);
+  const twist = Q().set(pr.x, pr.y, pr.z, dq.w).normalize();
+  setWorldQuat(lo2, Q().slerp(twist, 0.5).multiply(worldQuat(lo2)));
+  setWorldQuat(n, qWrist);
+  // fingers follow the recorded joints
+  CHAINS.forEach(ch => ch.forEach(([b, i, j]) => {
+    if (seen[h + i] && seen[h + j]) aim(b + "_" + s, rec(h + j).sub(rec(h + i)));
+  }));
+}
+function tip(s, k, out) {
+  const n = TIPS[k] + "_" + s, q = worldQuat(n);
+  return worldPos(n, out).addScaledVector(dirLocal[n].clone().applyQuaternion(q), tipLen[n]);
+}
+
+// where the recording puts a wrist, or null when that hand is not signing. With the hand
+// itself unseen, the body tracker still guesses a wrist; a guess well below the shoulders is
+// a hand resting out of the picture, so the person rests it at the side instead.
+function wristSeen(sd) {
+  if (seen[sd.hand]) return rec(sd.hand);
+  if (!seen[sd.wr] || !(seen[SH_L] && seen[SH_R])) return null;
+  const w = rec(sd.wr), a = rec(SH_L), b = rec(SH_R);
+  const drop = (a.y + b.y) / 2 - w.y, width = a.distanceTo(b) || 26;
+  return drop > 0.6 * width ? null : w;
+}
+
+// ── the face: brows and eyelids follow the recorded face; a blink now and then ──
+const EX = {raise: 0, lower: 0, knit: 0, squint: 0};
+let nextBlink = 1800, lastNow = null;
+function faceExpression() {
+  const E = D.expr;
+  if (!E || !recF.ok || ![...E.brow, ...E.lids, ...E.knit].every(i => seen[i])) return null;
+  const y = i => rec(i).sub(recF.O).dot(recF.U) / recF.fh;
+  const brow = ((y(E.brow[0]) - y(E.brow[1])) + (y(E.brow[2]) - y(E.brow[3]))) / 2;
+  const L = E.lids, gap = (a, b, c, d) => rec(a).distanceTo(rec(b)) / (rec(c).distanceTo(rec(d)) || 1);
+  const open = (gap(L[0], L[1], L[2], L[3]) + gap(L[4], L[5], L[6], L[7])) / 2;
+  const knit = rec(E.knit[0]).distanceTo(rec(E.knit[1])) / recF.fw;
+  // middle of 6,000 library frames: brow 0.126, eye 0.216, knit 0.192; past a dead zone
+  const c = x => Math.min(1, Math.max(0, x));
+  return {raise: c((brow - 0.132) / 0.035), lower: c((0.116 - brow) / 0.02),
+          knit: c((0.184 - knit) / 0.02), squint: c((0.17 - open) / 0.07)};
+}
+function blinkAmount(now) {
+  if (now > nextBlink + 170) nextBlink = now + 2200 + Math.random() * 3200;
+  const p = (now - nextBlink) / 170;
+  return p >= 0 && p <= 1 ? Math.sin(Math.PI * p) : 0;
+}
+const turnBy = (n, axis, a) => B[n].quaternion.multiply(Q().setFromAxisAngle(axis, a));
+const X1 = V().set(1, 0, 0), Z1 = V().set(0, 0, 1), Y1 = V().set(0, 1, 0);
+function poseFace(now, dt) {
+  const want = faceExpression() || {raise: 0, lower: 0, knit: 0, squint: 0};
+  const k = Math.min(1, dt * 10);
+  for (const n in EX) EX[n] += (want[n] - EX[n]) * k;
+  const close = Math.max(blinkAmount(now), 0.55 * EX.squint);
+  ["L", "R"].forEach((s, i) => {
+    turnBy("oculi01_" + s, X1, -0.5 * EX.raise + 0.3 * EX.lower);
+    turnBy("oculi01_" + s, Z1, (i ? -1 : 1) * 0.45 * EX.knit);
+    turnBy("orbicularis03_" + s, X1, -0.36 * close);
+    turnBy("orbicularis04_" + s, X1, 0.12 * close);
+  });
+  turn.updateMatrixWorld(true);
+}
+// the eyes look at the viewer, as a signer looks at the person signed to
+const camPose = V().set(0, 1.4, 2.75);
+function poseEyes() {
+  const dq = worldQuat("head").multiply(restQ["head"].clone().invert());
+  ["eye_L", "eye_R"].forEach(n => {
+    const fwd = Y1.clone().applyQuaternion(restQ[n]).applyQuaternion(dq);
+    const to = camPose.clone().sub(worldPos(n)).normalize();
+    const ang = fwd.angleTo(to); if (ang < 1e-4) return;
+    const q = Q().slerp(Q().setFromUnitVectors(fwd, to), Math.min(1, 0.2 / ang) * 0.7);
+    setWorldQuat(n, q.multiply(worldQuat(n)));
+  });
+}
+
+const spotPos = V(), tipPos = V();
+const ARM = {L: {k: 0, last: null}, R: {k: 0, last: null}};   // k: 1 signing, 0 resting
+function pose(t, now) {
+  const dt = lastNow === null ? 1 : Math.min(0.1, Math.max(0, (now - lastNow) / 1000));
+  lastNow = now;
+  resetPose();
+  poseTorso();
+  poseHead();
+  if (recF.ok) avFaceBasis(avF);
+  poseFace(now, dt);
+  poseEyes();
+  const now_ = touchAt(t);
+  if (now_ !== T) { T = now_; anchor = T ? T.anchor : null; showWhere(T && T.anchor ? T : null); }
+  const tw = touchWeight(t);
+  if (anchor) spotPoint(spotPos);
+  ["L", "R"].forEach(s => {
+    const sd = SIDES[s], A = ARM[s];
+    const wr = wristSeen(sd);
+    let target = wr ? mapPoint(wr) : null;
+    // ease between signing and resting, so a hand the tracker loses does not jump
+    if (target) A.last = target.clone();
+    A.k += ((target ? 1 : 0) - A.k) * Math.min(1, dt * 7);
+    let pole = null;
+    if (!target && A.last && A.k > 0.01) {
+      target = hangPoint(s).lerp(A.last, A.k);
+      pole = hangPole(s).lerp(trackedPole(s), A.k);
+    } else if (target && A.k < 0.99) {
+      target = hangPoint(s).lerp(target, A.k);
+      pole = hangPole(s).lerp(trackedPole(s), A.k);
+    }
+    poseArm(s, target, pole);
+    // the touch: bring the fingertip onto the spot (the recording's depth is a guess)
+    if (anchor && target && sd.hand === T.hand && tw > 0) {
+      for (let it = 0; it < 3; it++) {
+        const k = (T.point - T.hand), tp = tip(s, k, tipPos);
+        const goal = spotPos.clone().addScaledVector(avF.F, 0.004);
+        target = target.clone().addScaledVector(goal.sub(tp), tw);
+        resetSide(s); poseArm(s, target, pole);
+      }
+    }
+  });
+  showTouch(tw, now);
+}
+function resetSide(s) {
+  Object.keys(B).forEach(n => { if (n.endsWith("_" + s) && /^(upperarm|lowerarm|wrist|finger|metacarpal)/.test(n)) B[n].quaternion.copy(restLocal[n]); });
+  turn.updateMatrixWorld(true);
+}
+function showTouch(w, now) {
+  if (!anchor) { spot.visible = tipMark.visible = false; return; }
+  const m = new THREE.Matrix4().makeBasis(avF.R, avF.U, avF.F);
+  spot.quaternion.setFromRotationMatrix(m);
+  spot.position.copy(spotPos).addScaledVector(avF.F, 0.0025);
+  spot.scale.setScalar(1 + 0.18 * w * Math.sin(now / 130));
+  spotHalo.material.opacity = 0.18 + 0.3 * w;
+  spot.visible = true;
+  const s = T.hand === 0 ? "L" : "R";
+  tipMark.visible = !!seen[T.point];
+  tip(s, T.point - T.hand, tipMark.position);
+}
+
+// ── turning, views, close-up ──
+let yaw = 0, pitch = 0, dragging = false, lx = 0, ly = 0, target = null;
+box.addEventListener("pointerdown", e => { if (e.target.tagName === "BUTTON") return; dragging = true; lx = e.clientX; ly = e.clientY; box.setPointerCapture(e.pointerId); target = null; });
+box.addEventListener("pointermove", e => { if (!dragging) return;
+  yaw += (e.clientX - lx) * 0.01; pitch = Math.max(-0.6, Math.min(0.6, pitch + (e.clientY - ly) * 0.008));
+  lx = e.clientX; ly = e.clientY; });
+box.addEventListener("pointerup", () => { dragging = false; });
+box.addEventListener("dblclick", () => { target = 0; pitch = 0; });
+document.querySelectorAll("#views button[data-yaw]").forEach(btn => btn.addEventListener("click", () => {
+  target = parseFloat(btn.dataset.yaw) * (D.mirror ? -1 : 1); pitch = 0; }));
+let closeUp = !!D.closeUp;
+const zoomBtn = document.getElementById("zoom");
+zoomBtn.textContent = closeUp ? "Whole body" : "Close-up";
+zoomBtn.addEventListener("click", () => { closeUp = !closeUp; zoomBtn.textContent = closeUp ? "Whole body" : "Close-up"; });
+function size() {
+  const w = box.clientWidth || 600, h = box.clientHeight || __HEIGHT__;
+  renderer.setSize(w, h, false); renderer.domElement.style.width = "100%"; renderer.domElement.style.height = h + "px";
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+new ResizeObserver(size).observe(box); size();
+const camAt = V(), lookAt = V(), headW = V();
+let camInit = false;
+function frameCamera() {
+  const head = ready ? worldPos("head", headW) : headW.set(0, 1.6, 0);
+  const far = [V().set(0, head.y - 0.27, 2.75), V().set(0, head.y - 0.27, 0)];
+  const near = [V().set(head.x, head.y + 0.06, head.z + 1.0), V().set(head.x, head.y + 0.06, head.z)];
+  const [c, l] = closeUp ? near : far;
+  if (!camInit) { camAt.copy(c); lookAt.copy(l); camInit = true; }
+  camAt.lerp(c, 0.12); lookAt.lerp(l, 0.12);
+  camera.position.copy(camAt); camera.lookAt(lookAt);
+}
+
+const start = performance.now();
+function tick(now) {
+  if (ready) {
+    const t = D.frame === null ? Math.max(0, (now - start) / 1000) * D.fps * D.speed : D.frame;
+    // pose in the person's own space, then turn (and mirror) for the view
+    turn.rotation.set(0, 0, 0); root.scale.x = 1; scene.updateMatrixWorld(true);
+    load(t); pose(t, now); showWord(t);
+    if (target !== null) { yaw += (target - yaw) * 0.15; if (Math.abs(target - yaw) < 1e-3) target = null; }
+    turn.rotation.set(pitch, yaw, 0); root.scale.x = D.mirror ? -1 : 1;
+    scene.updateMatrixWorld(true);
+    frameCamera();
+    camPose.copy(camera.position); turn.worldToLocal(camPose);   // the viewer, in the pose's space
+  }
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+
+// load the person (served by Streamlit from the app's static folder)
+function begin(buffer) {
+  new THREE.GLTFLoader().parse(buffer, "", gltf => {
+    setUp(gltf.scene);
+    TS.forEach(x => { x.anchor = findAnchor(x); });
+    requestAnimationFrame(tick);
+  }, () => fallback());
+}
+fetch(AF.url).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+  .then(begin).catch(() => fallback());
+})();
+</script></body></html>

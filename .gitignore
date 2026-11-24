@@ -1,0 +1,31 @@
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Runtime artifacts
+logs/*.log
+recordings/
+# Trained models (large; trained on third-party data — share results, not weights)
+models/*
+!models/.gitkeep
+
+# Training data, personal settings and large video assets are never committed.
+# (Kaggle ASL Signs, UAlpha40 and ASL Citizen have their own licenses.)
+data/*
+!data/.gitkeep
+FOR_KAGGLE/
+# Private API keys (AI sentences)
+.streamlit/secrets.toml
+.env
+# Sign animations are derived from third-party datasets — keep them local
+assets/sign_animations/*
+!assets/sign_animations/.gitkeep
+*.zip
+*.npz
+*.parquet
+assets/sign_videos/*/*.mp4
+assets/sign_videos/*/letters/*.mp4

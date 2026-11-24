@@ -1,0 +1,143 @@
+# ============================================================
+# SignBridge configuration — single source of truth.
+# Every value here is validated by src/sign_bridge/config.py
+# (pydantic). Override any field via a custom YAML passed with
+# --config, or env var SIGN_BRIDGE_CONFIG pointing to a file.
+# ============================================================
+
+app:
+  name: SignBridge
+  version: "0.7.1"
+  default_language: asl          # asl | psl
+
+paths:
+  data_dir: data                 # landmark CSVs:   data/<lang>/<LABEL>/<ts>.csv
+  models_dir: models             # trained models:  models/<lang>_<arch>_<ts>.keras
+  video_dir: assets/sign_videos  # sign clips:      assets/sign_videos/<lang>/<GLOSS>.mp4
+  recordings_dir: recordings     # raw collector mp4s (not shipped)
+  logs_dir: logs
+
+capture:
+  camera_index: 0
+  frame_width: 640
+  frame_height: 480
+  target_fps: 30
+  mirror: true                   # selfie view — matches signer's mental model
+
+audio:
+  sample_rate: 16000             # Whisper-native rate
+  channels: 1
+  max_record_seconds: 15
+
+landmarks:
+  window_size: 30                # frames per model input (every clip is resampled to this)
+  feature_dim: 162               # 2 hands (2×21×3=126) + upper-body pose (12×3=36)
+  min_detection_confidence: 0.5
+  min_tracking_confidence: 0.5
+  model_complexity: 1            # MediaPipe Holistic: 0 fast | 1 balanced | 2 accurate
+
+model:
+  architecture: lstm             # lstm | transformer | conv_transformer
+  lstm_units: [128, 64]
+  dense_units: 64
+  dropout: 0.3
+  transformer:
+    d_model: 96
+    num_heads: 4
+    ff_dim: 192
+    num_blocks: 2
+  conv_transformer:              # Conv1D + Transformer hybrid (best on ASL Signs)
+    dim: 192
+    kernel_size: 17
+    num_stacks: 2                # each stack = convs_per_stack conv blocks + 1 attention block
+    convs_per_stack: 3
+    num_heads: 4
+    expand: 2
+    drop_path: 0.2
+    late_dropout: 0.5
+    weight_decay: 0.05
+    label_smoothing: 0.1
+
+training:
+  batch_size: 32
+  epochs: 120
+  learning_rate: 0.001
+  validation_split: 0.15
+  test_split: 0.15
+  cv_folds: 5
+  early_stopping_patience: 12
+  reduce_lr_patience: 5
+  reduce_lr_factor: 0.5
+  use_class_weights: true        # handles imbalanced sample counts per sign
+  augment: true
+  seed: 42
+
+augmentation:
+  rotation_deg: 15.0             # ± in-plane rotation
+  scale_pct: 10.0                # ± uniform scale
+  mirror: true                   # horizontal flip w/ left-right landmark swap
+  temporal_jitter_frames: 3      # frames randomly dropped/duplicated, then resampled
+  copies_per_sample: 2           # augmented copies generated per original window
+
+inference:
+  predict_every_n_frames: 2      # run the model every Nth frame (~3 ms per call)
+  confidence_threshold: 0.80     # softmax floor to count a prediction
+  lock_frames: 10                # agreeing frames required to lock a sign
+  cooldown_frames: 15            # ignore predictions briefly after a lock
+  window_seconds: 2.0            # live motion window; keep equal to collector.clip_seconds
+  hand_grace_seconds: 0.4        # brief hand dropouts shorter than this are ignored
+  sentence_pause_seconds: 1.5    # no hands for this long -> finalize sentence
+  # Sign segmentation (one guess per finished sign) — used by whole-sign models
+  # such as the Google ASL Signs ones; "auto" decides from the model.
+  mode: auto                     # auto | window | segment
+  # Measured 2026-11-22 on webcam-style ASL Citizen clips (hands rise, sign, lower), streamed
+  # through the app at 12 fps: chosen on 400 val-signer clips, checked on 400 test-signer clips
+  # (v0.4 model). 0.45/0.10 gave test correct 49.2% / wrong 10.0% / not sure 40.8%;
+  # 0.35/0.05 gives 54.0% / 12.0% / 34.0% (with hold 0.4).
+  segment_confidence: 0.35       # min probability to accept a sign (else "not sure")
+  segment_margin: 0.05           # best must beat the runner-up by this much
+  # Measured on 800 unseen-signer clips (notebooks/tune_segmenter.ipynb, 2026-11-20):
+  # real signs run 0.2-9.4 s, median 0.5 s, so the limits are deliberately wide.
+  motion_start_speed: 0.6        # hand speed (shoulder widths/s) that starts a sign
+  motion_stop_speed: 0.15        # below this the hands count as still
+  hold_seconds: 0.4              # still this long -> the sign is finished (0.6 until v0.14.1;
+                                 # same accuracy on the clips above, answer comes 0.2 s sooner)
+  min_sign_seconds: 0.05         # shorter movements are ignored
+  max_sign_seconds: 6.0          # a sign is cut off at this length
+  merge_gap_seconds: 0.3         # movement resuming this soon = the same sign continuing
+  repeat_window_seconds: 1.0     # the same sign again this soon = one sign split in two (0 = off)
+
+collector:
+  samples_per_label: 50
+  clip_seconds: 2.0              # wall-clock length of each recorded clip
+  countdown_seconds: 3
+  min_hands_visible: 0.6         # reject a take if hands were seen in <60% of frames
+
+stt:
+  whisper_model: base            # tiny | base | small | medium
+  language: en
+
+tts:
+  engine: gtts                   # gtts (online, natural) | pyttsx3 (offline)
+  gtts_lang: en
+  pyttsx3_rate: 170
+
+ui:
+  theme: field_guide             # editorial paper-and-ink theme (design dir #4)
+  high_contrast_default: false
+  base_font_px: 18
+  show_fps: true
+  captions_always_on: true
+
+ai:
+  # Turns the signed words into a natural English sentence
+  # (e.g. MOM DAD NO DRINK -> "Mom and Dad don't drink.").
+  # Only the sign words are sent to the AI service. Without a key or internet
+  # the app simply joins the words.
+  enabled: true
+  provider: gemini               # gemini | anthropic | openai | none
+  model: ""                      # empty = provider default (gemini-3.5-flash-lite, claude-haiku-5-5, gpt-5-mini)
+                                 # Gemini free tier: Flash-Lite allows many more requests/day than Flash.
+  max_options: 3                 # readings to offer when the signs are ambiguous
+  timeout_seconds: 10
+  secrets_file: .streamlit/secrets.toml   # where the app saves your API key (git-ignored)

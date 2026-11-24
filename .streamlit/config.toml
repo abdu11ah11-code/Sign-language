@@ -1,0 +1,11 @@
+# Used when running `streamlit run src/sign_bridge/ui/app.py` from the project root.
+# (`sign-bridge` passes the same values on the command line.)
+[theme]
+base = "light"
+primaryColor = "#1E5A45"
+backgroundColor = "#F7F5F0"
+textColor = "#181611"
+
+[server]
+# serves src/sign_bridge/ui/static/ (the 3D person) at /app/static/
+enableStaticServing = true

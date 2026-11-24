@@ -4,6 +4,9 @@ Run via the console script ``sign-bridge`` (see :mod:`sign_bridge.main`) or
 directly with ``streamlit run src/sign_bridge/ui/app.py``. Wires the theme,
 global sidebar, and the three tabs together; all heavy ML work is lazy-loaded
 inside the tabs so the page paints immediately.
+
+The live camera loop runs *last*, after every tab has been drawn, so all
+tabs stay usable while the camera is on (see ``camera_view``).
 """
 
 from __future__ import annotations
@@ -35,12 +38,19 @@ def main() -> None:
     tab_sign, tab_speech, tab_conv = st.tabs(
         ["Sign → Speech", "Speech → Sign", "Conversation"]
     )
+    views: list[camera_view.LiveView] = []
     with tab_sign:
-        camera_view.render(config, context="tab_sign")
+        view = camera_view.render(config, context="tab_sign")
+        if view is not None:
+            views.append(view)
     with tab_speech:
         sign_player.render(config, context="tab_speech")
     with tab_conv:
-        conversation.render(config)
+        conv_view = conversation.render(config)
+        if conv_view is not None:
+            views.append(conv_view)
+
+    camera_view.run_live_loop(config, views)
 
 
 if __name__ == "__main__":
