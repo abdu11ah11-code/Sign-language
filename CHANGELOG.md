@@ -5,6 +5,13 @@
 > Anthropic), with the course instructor's permission. All reported results
 > come from runs performed and checked by the authors.
 
+## 0.17.3 — light or dark landing page
+
+- A **Light / Dark** switch at the top right of the landing page (website and in-app). The
+  choice is remembered in the browser; with no choice the page follows the system setting.
+  The 3D points view repaints in the new colours. Checked in a browser: switch, reload
+  (kept), switch back, on both forms of the page.
+
 ## 0.17.2 — no faded welcome page after Start signing
 
 - The welcome page stayed on screen, faded, for 4–5 s after **Start signing** while the

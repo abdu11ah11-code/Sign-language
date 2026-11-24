@@ -60,6 +60,10 @@ h1, h2, h3 { text-wrap: balance; }
 .bar nav a { text-decoration: none; padding-block: 10px; }
 .bar nav a:hover { color: var(--signal); }
 .bar nav .go { color: var(--signal); }
+.theme { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; background: transparent;
+         color: var(--ink); border: 1px solid var(--ink); font: 500 13px/1 var(--mono); letter-spacing: 0.06em;
+         text-transform: uppercase; cursor: pointer; }
+.theme:hover { color: var(--signal); border-color: var(--signal); }
 
 /* hero */
 .hero .wrap { padding-block: 40px 0; }
@@ -180,6 +184,34 @@ footer b { color: var(--ink); font-weight: 600; display: block; }
 </style>
 </head>
 <body>
+<script>
+/* Light or dark: the viewer's choice, remembered; otherwise the system setting. */
+(function () {
+  const root = document.documentElement, dark = matchMedia("(prefers-color-scheme: dark)");
+  let saved = null;
+  try { saved = localStorage.getItem("signbridge-theme"); } catch (e) { /* storage blocked */ }
+  if (saved === "dark" || saved === "light") root.dataset.theme = saved;
+  const now = () => root.dataset.theme || (dark.matches ? "dark" : "light");
+  function label() {
+    const b = document.getElementById("theme"); if (!b) return;
+    const next = now() === "dark" ? "light" : "dark";
+    b.querySelector("span").textContent = next === "dark" ? "Dark" : "Light";
+    b.setAttribute("aria-label", "Switch to " + next + " theme");
+    b.setAttribute("aria-pressed", String(now() === "dark"));
+  }
+  document.addEventListener("DOMContentLoaded", () => {
+    label();
+    document.getElementById("theme").addEventListener("click", () => {
+      const next = now() === "dark" ? "light" : "dark";
+      root.dataset.theme = next;
+      try { localStorage.setItem("signbridge-theme", next); } catch (e) { /* not remembered */ }
+      label();
+    });
+  });
+  dark.addEventListener("change", label);
+})();
+</script>
+
 <header class="bar">
   <div class="wrap">
     <a class="mark" href="#top">SignBridge</a>
@@ -190,6 +222,10 @@ footer b { color: var(--ink); font-weight: 600; display: block; }
       <a href="#limits">Limits</a>
       <a class="go" href="#watch">Watch the demo →</a>
     </nav>
+    <button class="theme" id="theme" type="button" aria-pressed="false" aria-label="Switch to dark theme">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"/></svg>
+      <span>Dark</span>
+    </button>
   </div>
 </header>
 

@@ -78,3 +78,11 @@ def test_app_opens_on_the_welcome_screen() -> None:
     assert 'key="start_signing"' in source and '"Home page"' in source
     assert "100vh" in source                              # the welcome page fills the window
     assert 'landing_page("app")' in source
+
+
+def test_both_pages_have_the_theme_switch() -> None:
+    for mode in ("web", "app"):
+        page = landing.landing_page(mode)  # type: ignore[arg-type]
+        assert 'id="theme"' in page and 'localStorage.getItem("signbridge-theme")' in page
+        # both palettes exist, and the switch sets the attribute they key on
+        assert ':root[data-theme="dark"]' in page and "root.dataset.theme = next" in page

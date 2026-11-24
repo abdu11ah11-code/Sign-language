@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sign-bridge"
-version = "0.17.2"
+version = "0.17.3"
 description = "Bidirectional ASL + PSL sign language translator: sign-to-speech and speech-to-sign."
 readme = "README.md"
 requires-python = ">=3.11,<3.13"   # TensorFlow 2.16 ships no 3.13 wheels
