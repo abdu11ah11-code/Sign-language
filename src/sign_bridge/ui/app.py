@@ -34,18 +34,25 @@ HOME_CSS = """<style>
 </style>"""
 
 
+def _show(view: str) -> None:
+    """Button callback: switch screens before the next run, so it runs only once."""
+    st.session_state["view"] = view
+
+
 def home() -> None:
     """The welcome screen: the landing page, full window. Its Start signing buttons press
-    the hidden Streamlit button below, which switches to the signing tabs."""
+    the hidden Streamlit button below, which switches to the signing tabs.
+
+    Everything sits in one container, so the signing screen's first element replaces it
+    at once instead of leaving a faded welcome page while the models load."""
     import streamlit.components.v1 as components
 
     from sign_bridge.ui.landing import landing_page
 
-    st.markdown(HOME_CSS, unsafe_allow_html=True)
-    if st.button("Start signing", key="start_signing"):
-        st.session_state["view"] = "app"
-        st.rerun()
-    components.html(landing_page("app"), height=900, scrolling=True)
+    with st.container(key="home"):
+        st.markdown(HOME_CSS, unsafe_allow_html=True)
+        st.button("Start signing", key="start_signing", on_click=_show, args=("app",))
+        components.html(landing_page("app"), height=900, scrolling=True)
 
 
 def main() -> None:
@@ -67,9 +74,7 @@ def main() -> None:
         home()
         return
     controls.sidebar(config)
-    if st.sidebar.button("Home page", key="go_home", width="stretch"):
-        st.session_state["view"] = "home"
-        st.rerun()
+    st.sidebar.button("Home page", key="go_home", width="stretch", on_click=_show, args=("home",))
     masthead(st.session_state["language"])
 
     tab_sign, tab_speech, tab_conv = st.tabs(

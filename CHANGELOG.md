@@ -5,6 +5,14 @@
 > Anthropic), with the course instructor's permission. All reported results
 > come from runs performed and checked by the authors.
 
+## 0.17.2 — no faded welcome page after Start signing
+
+- The welcome page stayed on screen, faded, for 4–5 s after **Start signing** while the
+  signing screen loaded its models. It now sits in one container that the signing screen's
+  first element replaces, and both buttons switch screens in a callback (one run, not two).
+  Checked in a running app: the welcome page is gone 0.7 s after the click; **Home page**
+  brings it back.
+
 ## 0.17.1 — the welcome page fills the window
 
 - Inside the app the welcome page now fills the whole browser window: Streamlit's header,
