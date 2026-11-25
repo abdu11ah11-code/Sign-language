@@ -295,8 +295,18 @@ The animations are derived from the competition data, so
 7. Optional (v0.16): to let several trained models answer together, list their
    file stems in `models/asl_latest.json` under `"ensemble"`, e.g.
    `"ensemble": ["asl_conv_transformer_20261122_103158", "asl_conv_transformer_20261123_222845"]`.
-   The app averages their answers; measured on ASL Citizen's test signers, runs
-   B and C together reach 93.23% top-1 (92.64% for run C alone).
+   The app averages their answers. Measured top-1 on unseen signers:
+
+   | models | Kaggle ASL Signs test (4 signers) | ASL Citizen test (11 signers) |
+   |---|---|---|
+   | run C alone | 72.26% | 92.64% |
+   | runs B + C | 72.61% | 93.23% |
+   | runs B + C + D | **73.27%** | **93.93%** |
+
+   Run D is run C's recipe with another training seed (`SB_TRAIN_SEED=7`,
+   `notebooks/train_asl_run_d.ipynb`). Through the live app on all 2,703 ASL Citizen
+   test clips, B + C + D is right 89.9% of the time and wrong 3.8% (the rest "not
+   sure"), taking about 24 ms a guess for the three models (measured on a cloud CPU, not on the project laptop).
 
 ### Landing page (v0.17)
 

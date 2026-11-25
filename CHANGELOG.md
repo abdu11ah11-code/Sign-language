@@ -5,6 +5,19 @@
 > Anthropic), with the course instructor's permission. All reported results
 > come from runs performed and checked by the authors.
 
+## 0.17.4 — run D: three models answer together
+
+- **Run D** trained on Kaggle: run C's recipe with a different training seed
+  (`SB_TRAIN_SEED=7`; the data split is unchanged). Alone: 71.45% top-1 on Kaggle's 4 unseen
+  signers, 92.79% on ASL Citizen's 11 unseen signers.
+- Runs **B + C + D** averaged beat every other combination on both tests: **73.27%** Kaggle
+  (B + C 72.61%, C 72.26%) and **93.93%** ASL Citizen (B + C 93.23%). Through the live app on
+  all 2,703 ASL Citizen test clips: right 89.9%, wrong 3.8% (B + C: 89.5%, 4.0%). Cost: about
+  24 ms a guess for three models on a cloud CPU (B + C 14 ms).
+- Model weights stay out of the repository (third-party training data); to use the three
+  models, list all three stems under `"ensemble"` in `models/asl_latest.json`.
+- Landing page and README show the new numbers; the chart adds B + C + D.
+
 ## 0.17.3 — light or dark landing page
 
 - A **Light / Dark** switch at the top right of the landing page (website and in-app). The

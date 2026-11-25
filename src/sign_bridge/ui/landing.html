@@ -115,11 +115,11 @@ h1.word span { display: block; }
 .results { row-gap: 56px; align-items: start; }
 .chart { grid-column: 1 / span 7; margin: 0; min-width: 0; }
 .chart-scroll { overflow-x: auto; }
-.bars { position: relative; height: 380px; min-width: 520px; perspective: 1100px; perspective-origin: 30% -20%; }
+.bars { position: relative; height: 380px; min-width: 580px; perspective: 1100px; perspective-origin: 30% -20%; }
 .axis { position: absolute; inset: 0 0 46px 44px; }
 .tick { position: absolute; left: -44px; right: 0; border-top: 1px solid var(--hair); font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }
 .tick span { position: absolute; left: 0; top: -8px; width: 36px; text-align: right; }
-.cols { position: absolute; inset: 0 0 0 44px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 18px; padding-right: 8px; }
+.cols { position: absolute; inset: 0 0 0 44px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 14px; padding-right: 8px; }
 .col { position: relative; display: flex; flex-direction: column; justify-content: flex-end; }
 .prism { position: relative; height: calc((var(--v) - 50) / 50 * (380px - 46px)); margin-bottom: 46px; transform-style: preserve-3d; transform: rotateX(-8deg) rotateY(-24deg); transition: transform .5s ease; }
 .col:hover .prism { transform: rotateX(-8deg) rotateY(-36deg); }
@@ -297,7 +297,7 @@ footer b { color: var(--ink); font-weight: 600; display: block; }
       <div class="grid results">
         <figure class="chart">
           <div class="chart-scroll">
-            <div class="bars" role="img" aria-label="Top-1 accuracy on unseen signers. Kaggle ASL Signs: run A 68.54%, run B 68.98%, run C 72.26%. ASL Citizen: run B 91.60%, run C 92.64%, runs B and C together 93.23%.">
+            <div class="bars" role="img" aria-label="Top-1 accuracy on unseen signers. Kaggle ASL Signs: run A 68.54%, run B 68.98%, run C 72.26%, runs B, C and D together 73.27%. ASL Citizen: run B 91.60%, run C 92.64%, runs B, C and D together 93.93%.">
               <div class="axis" aria-hidden="true">
                 <div class="tick" style="top: 0"><span>100</span></div>
                 <div class="tick" style="top: 20%"><span>90</span></div>
@@ -309,22 +309,23 @@ footer b { color: var(--ink); font-weight: 600; display: block; }
               <div class="cols" aria-hidden="true">
                 <div class="col" style="--v: 68.54"><span class="v">68.54</span><div class="prism"><div class="f"></div><div class="s"></div><div class="t"></div></div><span class="n">Run A<br>Kaggle</span></div>
                 <div class="col" style="--v: 68.98"><span class="v">68.98</span><div class="prism"><div class="f"></div><div class="s"></div><div class="t"></div></div><span class="n">Run B<br>Kaggle</span></div>
-                <div class="col hi" style="--v: 72.26"><span class="v">72.26</span><div class="prism"><div class="f"></div><div class="s"></div><div class="t"></div></div><span class="n">Run C<br>Kaggle</span></div>
+                <div class="col" style="--v: 72.26"><span class="v">72.26</span><div class="prism"><div class="f"></div><div class="s"></div><div class="t"></div></div><span class="n">Run C<br>Kaggle</span></div>
+                <div class="col hi" style="--v: 73.27"><span class="v">73.27</span><div class="prism"><div class="f"></div><div class="s"></div><div class="t"></div></div><span class="n">B + C + D<br>Kaggle</span></div>
                 <div class="col" style="--v: 91.60"><span class="v">91.60</span><div class="prism"><div class="f"></div><div class="s"></div><div class="t"></div></div><span class="n">Run B<br>ASL Citizen</span></div>
                 <div class="col" style="--v: 92.64"><span class="v">92.64</span><div class="prism"><div class="f"></div><div class="s"></div><div class="t"></div></div><span class="n">Run C<br>ASL Citizen</span></div>
-                <div class="col hi" style="--v: 93.23"><span class="v">93.23</span><div class="prism"><div class="f"></div><div class="s"></div><div class="t"></div></div><span class="n">B + C<br>ASL Citizen</span></div>
+                <div class="col hi" style="--v: 93.93"><span class="v">93.93</span><div class="prism"><div class="f"></div><div class="s"></div><div class="t"></div></div><span class="n">B + C + D<br>ASL Citizen</span></div>
               </div>
             </div>
           </div>
           <figcaption>
             <span><b>Top-1 accuracy, %</b>, axis from 50. Kaggle ASL Signs: 4 unseen signers, 17,651 clips. ASL Citizen: 11 unseen signers, 2,703 clips.</span>
-            <span>Run A: ASL Signs only. Run B: + 4,121 ASL Citizen clips. Run C: 200 epochs, stronger augmentation, 2-frame motion. B + C: the two models' answers averaged.</span>
+            <span>Run A: ASL Signs only. Run B: + 4,121 ASL Citizen clips. Run C: 200 epochs, stronger augmentation, 2-frame motion. Run D: run C again with a different random start. B + C + D: the three models' answers averaged.</span>
           </figcaption>
         </figure>
         <div class="figures">
-          <div class="figure hi"><strong>72.26<small>%</small></strong><span>Best single model on Kaggle's unseen signers, 250 signs</span></div>
-          <div class="figure"><strong>89.5<small>%</small></strong><span>Right through the live app, ASL Citizen clips played frame by frame</span></div>
-          <div class="figure"><strong>4.0<small>%</small></strong><span>Wrong in that same test; the rest it marks "not sure"</span></div>
+          <div class="figure hi"><strong>73.27<small>%</small></strong><span>Three models answering together on Kaggle's unseen signers, 250 signs</span></div>
+          <div class="figure"><strong>89.9<small>%</small></strong><span>Right through the live app, ASL Citizen clips played frame by frame</span></div>
+          <div class="figure"><strong>3.8<small>%</small></strong><span>Wrong in that same test; the rest it marks "not sure"</span></div>
           <div class="figure"><strong>90.7<small>%</small></strong><span>Urdu letters in PSL, UAlpha40 test set</span></div>
         </div>
         <p class="note">ASL Citizen's style of video was part of training, its signers were not, so it is the easier of the two tests.</p>

@@ -47,7 +47,8 @@ def test_app_page_points_to_start_signing_instead_of_itself() -> None:
 
 def test_numbers_on_the_page_are_the_measured_ones() -> None:
     page = landing.landing_page("web")
-    for number in ("72.26", "93.23", "91.60", "92.64", "68.54", "68.98", "89.5", "4.0", "90.7"):
+    for number in ("73.27", "93.93", "72.26", "91.60", "92.64", "68.54", "68.98",
+                   "89.9", "3.8", "90.7"):
         assert number in page, number
 
 
